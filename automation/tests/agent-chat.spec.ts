@@ -73,9 +73,9 @@ test.describe('Agent Chat and Context Inspector Integration', () => {
     // 3. Input Interaction: Verify input is enabled, type message, and send
     const chatInput = page.getByPlaceholder('Type your message...');
     await expect(chatInput).toBeEnabled();
-    
+
     await chatInput.fill('Summarise the Q3 report');
-    
+
     const sendButton = page.getByRole('button', { name: 'Send' });
     await expect(sendButton).toBeEnabled();
     await sendButton.click();
@@ -84,9 +84,9 @@ test.describe('Agent Chat and Context Inspector Integration', () => {
     await expect(page.getByText('Summarise the Q3 report')).toBeVisible();
 
     // 4. Stream & Context Verification: Wait for response and context update
-    
+
     // Verify that the agent response bubble appears (agent bubbles have white background)
-    const agentBubble = page.locator('.bg-white.text-gray-800').first();
+    const agentBubble = page.getByText('Hello, I am the agent.');
     await expect(agentBubble).toBeVisible({ timeout: 15000 });
 
     // Verify the Context Inspector panel empty state disappears
