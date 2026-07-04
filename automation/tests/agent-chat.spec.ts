@@ -2,6 +2,66 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Agent Chat and Context Inspector Integration', () => {
   test('should connect to WebSocket, send a message, and update context inspector', async ({ page }) => {
+    // 0. Mock the WebSocket connection
+    await page.addInitScript(() => {
+      class MockWebSocket {
+        url: string;
+        readyState: number = 0;
+        listeners: Record<string, Function[]> = {};
+
+        constructor(url: string) {
+          this.url = url;
+          setTimeout(() => {
+            this.readyState = 1;
+            this.dispatchEvent('open');
+          }, 50);
+        }
+
+        addEventListener(type: string, listener: Function) {
+          if (!this.listeners[type]) this.listeners[type] = [];
+          this.listeners[type].push(listener);
+        }
+
+        removeEventListener(type: string, listener: Function) {
+          if (this.listeners[type]) {
+            this.listeners[type] = this.listeners[type].filter((l: Function) => l !== listener);
+          }
+        }
+
+        dispatchEvent(type: string, event: any = {}) {
+          if (this.listeners[type]) {
+            this.listeners[type].forEach((l: Function) => l(event));
+          }
+          const handler = (this as any)[`on${type}`];
+          if (handler) handler(event);
+        }
+
+        send(data: string) {
+          setTimeout(() => {
+            this.dispatchEvent('message', {
+              data: JSON.stringify({
+                type: 'TOKEN',
+                stream_id: 'mock-stream',
+                text: 'Here is the mocked response.'
+              })
+            });
+            this.dispatchEvent('message', {
+              data: JSON.stringify({
+                type: 'CONTEXT_SNAPSHOT',
+                data: { report: 'Q3', status: 'summarized' }
+              })
+            });
+          }, 50);
+        }
+
+        close() {
+          this.readyState = 3;
+          this.dispatchEvent('close');
+        }
+      }
+      (window as any).WebSocket = MockWebSocket;
+    });
+
     // 1. Navigate: Open the application
     await page.goto('/');
 
