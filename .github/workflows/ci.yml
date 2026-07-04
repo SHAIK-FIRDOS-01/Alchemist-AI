@@ -30,6 +30,12 @@ jobs:
     - name: Build Next.js application
       run: npm run build
 
+    - name: Start backend service (Docker)
+      run: docker compose -f docker-compose.test.yml up -d --build
+
+    - name: Wait for backend to be ready
+      run: npx wait-on tcp:localhost:4747
+
     - name: Run E2E tests
       run: npm run test:e2e
 
