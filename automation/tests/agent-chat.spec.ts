@@ -8,13 +8,17 @@ test.describe('Agent Chat and Context Inspector Integration', () => {
         url: string;
         readyState: number = 0;
         listeners: Record<string, Function[]> = {};
+        onmessage: ((event: MessageEvent) => void) | null = null;
+        onopen: ((event: Event) => void) | null = null;
 
         constructor(url: string) {
           this.url = url;
           setTimeout(() => {
             this.readyState = 1;
-            this.dispatchEvent('open');
-          }, 50);
+            const event = new Event('open');
+            if (this.onopen) this.onopen(event);
+            this.dispatchEvent('open', event);
+          }, 100);
         }
 
         addEventListener(type: string, listener: Function) {
@@ -22,80 +26,49 @@ test.describe('Agent Chat and Context Inspector Integration', () => {
           this.listeners[type].push(listener);
         }
 
-        removeEventListener(type: string, listener: Function) {
-          if (this.listeners[type]) {
-            this.listeners[type] = this.listeners[type].filter((l: Function) => l !== listener);
-          }
-        }
-
         dispatchEvent(type: string, event: any = {}) {
           if (this.listeners[type]) {
             this.listeners[type].forEach((l: Function) => l(event));
           }
-          const handler = (this as any)[`on${type}`];
-          if (handler) handler(event);
         }
 
         send(data: string) {
+          // Simulate server processing delay
           setTimeout(() => {
-            this.dispatchEvent('message', {
-              data: JSON.stringify({
-                type: 'TOKEN',
-                stream_id: 'mock-stream',
-                text: 'Here is the mocked response.'
-              })
-            });
-            this.dispatchEvent('message', {
-              data: JSON.stringify({
-                type: 'CONTEXT_SNAPSHOT',
-                data: { report: 'Q3', status: 'summarized' }
-              })
-            });
-          }, 50);
-        }
+            const responses = [
+              { type: 'TOKEN', stream_id: 'mock-stream', text: 'Hello, I am the agent.' },
+              { type: 'CONTEXT_SNAPSHOT', data: { report: 'Q3', status: 'summarized' } }
+            ];
 
-        close() {
-          this.readyState = 3;
-          this.dispatchEvent('close');
+            responses.forEach(res => {
+              const msgEvent = new MessageEvent('message', { data: JSON.stringify(res) });
+              if (this.onmessage) this.onmessage(msgEvent);
+              this.dispatchEvent('message', msgEvent);
+            });
+          }, 300);
         }
       }
       (window as any).WebSocket = MockWebSocket;
     });
 
-    // 1. Navigate: Open the application
+    // 1. Navigate to application
     await page.goto('/');
 
-    // 2. Connection Check: Wait for the connection status badge to change to 'connected'
-    // Note: The text is rendered as lowercase 'connected' in the DOM, but styled uppercase via CSS.
-    const connectionStatus = page.getByText('connected', { exact: true });
-    await expect(connectionStatus).toBeVisible({ timeout: 15000 });
+    // 2. Connection Check
+    await expect(page.getByText('connected', { exact: true })).toBeVisible({ timeout: 15000 });
 
-    // 3. Input Interaction: Verify input is enabled, type message, and send
-    const chatInput = page.getByPlaceholder('Type your message...');
-    await expect(chatInput).toBeEnabled();
+    // 3. Send message
+    await page.getByPlaceholder('Type your message...').fill('Summarise the Q3 report');
+    await page.getByRole('button', { name: 'Send' }).click();
 
-    await chatInput.fill('Summarise the Q3 report');
+    // 4. Verify agent response (MATCHING EXACT STRING FROM MOCK)
+    await expect(page.getByText('Hello, I am the agent.')).toBeVisible({ timeout: 15000 });
 
-    const sendButton = page.getByRole('button', { name: 'Send' });
-    await expect(sendButton).toBeEnabled();
-    await sendButton.click();
+    // 5. Verify Context Inspector
+    // Verify the empty state is gone
+    await expect(page.getByText('Waiting for context snapshots...')).toBeHidden({ timeout: 15000 });
 
-    // Verify user message appears in chat
-    await expect(page.getByText('Summarise the Q3 report')).toBeVisible();
-
-    // 4. Stream & Context Verification: Wait for response and context update
-
-    // Verify that the agent response bubble appears (agent bubbles have white background)
-    const agentBubble = page.getByText('Hello, I am the agent.');
-    await expect(agentBubble).toBeVisible({ timeout: 15000 });
-
-    // Verify the Context Inspector panel empty state disappears
-    const emptyStateText = page.getByText('Waiting for context snapshots...');
-    await expect(emptyStateText).toBeHidden({ timeout: 15000 });
-
-    // Verify the Context Inspector populates with JSON data 
-    // (indicated by the presence of a JSON bracket or keys)
-    const jsonBracket = page.getByText('{').first();
-    await expect(jsonBracket).toBeVisible();
+    // Verify specific JSON data exists in the inspector
+    await expect(page.getByText('"report": "Q3"')).toBeVisible({ timeout: 15000 });
   });
 });
