@@ -2,7 +2,9 @@ version: '3.8'
 services:
   backend:
     build:
-      context: ./backend
+      context: ./agent-server
       dockerfile: Dockerfile
     ports:
       - "4747:4747"
+    environment:
+      - NODE_ENV=test
