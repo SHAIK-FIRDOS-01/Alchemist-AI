@@ -6,10 +6,9 @@ interface ToolCallCardProps {
   name: string;
   args: Record<string, unknown>;
   result?: Record<string, unknown>;
-  status: 'tool_pending' | 'finished' | 'streaming';
 }
 
-export function ToolCallCard({ name, args, result, status }: ToolCallCardProps) {
+export function ToolCallCard({ name, args, result }: ToolCallCardProps) {
   return (
     <div className="mt-2 bg-gray-50 rounded-xl p-3 text-sm font-mono text-gray-800 border border-gray-200 min-h-[160px] flex flex-col shadow-sm transition-all duration-300">
       <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
@@ -20,7 +19,7 @@ export function ToolCallCard({ name, args, result, status }: ToolCallCardProps) 
         </div>
         <span className="font-semibold text-gray-700 tracking-tight">{name}</span>
       </div>
-      
+
       <div className="mb-3">
         <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 block">Arguments</span>
         <pre className="bg-gray-100/80 p-2.5 rounded-lg overflow-x-auto text-[11px] leading-relaxed border border-gray-200/50">

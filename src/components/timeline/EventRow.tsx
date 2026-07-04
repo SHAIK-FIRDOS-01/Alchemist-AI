@@ -6,7 +6,7 @@ export interface GroupedEvent {
   id: string;
   timestamp: number;
   direction: 'in' | 'out';
-  payload: any;
+  payload: Record<string, unknown>;
   isGroup?: boolean;
   groupCount?: number;
 }
@@ -42,7 +42,8 @@ export function EventRow({ event }: EventRowProps) {
     }
   };
 
-  const typeName = event.payload?.type || 'UNKNOWN';
+  const payloadWithType = event.payload as { type?: string };
+  const typeName = payloadWithType?.type || 'UNKNOWN';
   const colorClass = getTypeColor(typeName);
   const timeString = new Date(event.timestamp).toISOString().split('T')[1].slice(0, -1); // HH:mm:ss.SSS
 

@@ -117,7 +117,7 @@ export function useAgentSocket() {
         wsRef.current.close();
       }
     };
-  }, []); // ✅ FIX 2: Make this dependency array completely empty!
+  }, [connect]);
 
   return { sendMessage };
 }

@@ -14,25 +14,31 @@ export function TraceTimeline() {
     let currentGroup: GroupedEvent | null = null;
 
     for (const event of traceEvents) {
-      if (event.payload?.type === 'TOKEN' && event.direction === 'in') {
+      const payload = event.payload as { type?: string; stream_id?: string; text?: string };
+      if (payload.type === 'TOKEN' && event.direction === 'in') {
         if (!currentGroup) {
           currentGroup = {
             ...event,
             isGroup: true,
             groupCount: 1,
-            payload: { type: 'TOKEN_GROUP', stream_id: event.payload.stream_id, tokens: [event.payload.text] }
+            payload: { type: 'TOKEN_GROUP', stream_id: payload.stream_id, tokens: [payload.text] }
           };
-        } else if (currentGroup.payload.stream_id === event.payload.stream_id) {
-          currentGroup.groupCount! += 1;
-          currentGroup.payload.tokens.push(event.payload.text);
         } else {
-          result.push(currentGroup);
-          currentGroup = {
-            ...event,
-            isGroup: true,
-            groupCount: 1,
-            payload: { type: 'TOKEN_GROUP', stream_id: event.payload.stream_id, tokens: [event.payload.text] }
-          };
+          const currentGroupPayload = currentGroup.payload as { stream_id?: string; tokens: string[] };
+          if (currentGroupPayload.stream_id === payload.stream_id) {
+            currentGroup.groupCount! += 1;
+            if (payload.text) {
+              currentGroupPayload.tokens.push(payload.text);
+            }
+          } else {
+            result.push(currentGroup);
+            currentGroup = {
+              ...event,
+              isGroup: true,
+              groupCount: 1,
+              payload: { type: 'TOKEN_GROUP', stream_id: payload.stream_id, tokens: [payload.text] }
+            };
+          }
         }
       } else {
         if (currentGroup) {
@@ -52,9 +58,10 @@ export function TraceTimeline() {
 
   const filteredEvents = useMemo(() => {
     return groupedEvents.filter((event) => {
-      if (typeFilter !== 'ALL' && event.payload?.type !== typeFilter) {
+      const payload = event.payload as { type?: string };
+      if (typeFilter !== 'ALL' && payload.type !== typeFilter) {
         // Allow TOKEN_GROUP to pass if filter is TOKEN
-        if (!(typeFilter === 'TOKEN' && event.payload?.type === 'TOKEN_GROUP')) {
+        if (!(typeFilter === 'TOKEN' && payload.type === 'TOKEN_GROUP')) {
           return false;
         }
       }

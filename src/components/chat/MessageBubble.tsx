@@ -13,25 +13,23 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div className={`flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div 
-        className={`max-w-[85%] flex flex-col shadow-sm rounded-2xl p-4 transition-all duration-300 ${
-          isUser 
-            ? 'bg-blue-600 text-white rounded-br-sm' 
+      <div
+        className={`max-w-[85%] flex flex-col shadow-sm rounded-2xl p-4 transition-all duration-300 ${isUser
+            ? 'bg-blue-600 text-white rounded-br-sm'
             : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm hover:shadow-md'
-        }`}
+          }`}
       >
         {message.text && (
           <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
             {message.text}
           </div>
         )}
-        
+
         {message.toolData && (
-          <ToolCallCard 
+          <ToolCallCard
             name={message.toolData.name}
             args={message.toolData.args}
             result={message.toolData.result}
-            status={message.status}
           />
         )}
       </div>

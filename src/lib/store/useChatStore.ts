@@ -19,11 +19,11 @@ interface ChatState {
   connectionState: ConnectionState;
   messages: ChatMessage[];
   contextSnapshot: Record<string, unknown> | null;
-  contextHistory: Array<{ id: string; timestamp: number; data: any }>;
+  contextHistory: Array<{ id: string; timestamp: number; data: Record<string, unknown> }>;
   currentContextIndex: number;
-  traceEvents: Array<{ id: string; timestamp: number; direction: 'in' | 'out'; payload: any }>;
+  traceEvents: Array<{ id: string; timestamp: number; direction: 'in' | 'out'; payload: Record<string, unknown> }>;
   setConnectionState: (state: ConnectionState) => void;
-  addTraceEvent: (event: { direction: 'in' | 'out'; payload: any }) => void;
+  addTraceEvent: (event: { direction: 'in' | 'out'; payload: Record<string, unknown> }) => void;
   addUserMessage: (content: string) => void;
   appendToken: (stream_id: string, text: string) => void;
   setToolCall: (stream_id: string, call_id: string, tool_name: string, args: Record<string, unknown>) => void;
@@ -55,7 +55,7 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setConnectionState: (state) => set({ connectionState: state }),
 
-  addUserMessage: (content) => set((state) => ({
+  addUserMessage: (content: string) => set((state) => ({
     messages: [
       ...state.messages,
       {
@@ -140,7 +140,7 @@ export const useChatStore = create<ChatState>((set) => ({
     return state;
   }),
 
-  updateContext: (data) => set((state) => {
+  updateContext: (data: Record<string, unknown>) => set((state) => {
     const newHistory = [
       ...state.contextHistory,
       { id: crypto.randomUUID(), timestamp: Date.now(), data }
