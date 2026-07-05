@@ -19,19 +19,26 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm hover:shadow-md'
           }`}
       >
-        {message.text && (
-          <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-            {message.text}
-          </div>
-        )}
-
-        {message.toolData && (
-          <ToolCallCard
-            name={message.toolData.name}
-            args={message.toolData.args}
-            result={message.toolData.result}
-          />
-        )}
+        {message.parts.map((part, idx) => {
+          if (part.type === 'text') {
+            return (
+              <div key={idx} className="whitespace-pre-wrap break-words text-[15px] leading-relaxed mb-2 last:mb-0">
+                {part.content}
+              </div>
+            );
+          } else if (part.type === 'tool') {
+            return (
+              <ToolCallCard
+                key={part.call_id || idx}
+                call_id={part.call_id}
+                name={part.name}
+                args={part.args}
+                result={part.result}
+              />
+            );
+          }
+          return null;
+        })}
       </div>
     </div>
   );

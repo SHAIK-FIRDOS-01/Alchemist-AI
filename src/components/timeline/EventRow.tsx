@@ -1,22 +1,34 @@
 "use client";
 
-import React, { useState } from 'react';
-
-export interface GroupedEvent {
-  id: string;
-  timestamp: number;
-  direction: 'in' | 'out';
-  payload: Record<string, unknown>;
-  isGroup?: boolean;
-  groupCount?: number;
-}
+import React, { useState, useRef, useEffect } from 'react';
+import { useChatStore, TraceEvent } from '@/lib/store/useChatStore';
 
 interface EventRowProps {
-  event: GroupedEvent;
+  event: TraceEvent;
 }
 
 export function EventRow({ event }: EventRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const { highlightedId, setHighlightedId } = useChatStore();
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  const payload = event.payload as Record<string, unknown>;
+  const callId = payload.call_id as string | undefined;
+
+  const isHighlighted = callId && highlightedId === callId;
+
+  useEffect(() => {
+    if (isHighlighted && rowRef.current) {
+      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isHighlighted]);
+
+  const handleRowClick = () => {
+    setExpanded(!expanded);
+    if (callId) {
+      setHighlightedId(callId);
+    }
+  };
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -48,10 +60,15 @@ export function EventRow({ event }: EventRowProps) {
   const timeString = new Date(event.timestamp).toISOString().split('T')[1].slice(0, -1); // HH:mm:ss.SSS
 
   return (
-    <div className="flex flex-col border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+    <div 
+      ref={rowRef}
+      className={`flex flex-col border-b border-gray-100 last:border-0 transition-colors ${
+        isHighlighted ? 'bg-blue-50/80 border-l-4 border-l-blue-500' : 'hover:bg-gray-50 border-l-4 border-l-transparent'
+      }`}
+    >
       <div 
         className="flex items-center justify-between p-2 cursor-pointer select-none"
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleRowClick}
       >
         <div className="flex items-center gap-3 overflow-hidden">
           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${event.direction === 'in' ? 'bg-indigo-100 text-indigo-700' : 'bg-orange-100 text-orange-700'}`}>

@@ -1,16 +1,35 @@
 "use client";
 
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import { useChatStore } from '@/lib/store/useChatStore';
 
 interface ToolCallCardProps {
+  call_id: string;
   name: string;
   args: Record<string, unknown>;
   result?: Record<string, unknown>;
 }
 
-export function ToolCallCard({ name, args, result }: ToolCallCardProps) {
+export function ToolCallCard({ call_id, name, args, result }: ToolCallCardProps) {
+  const { highlightedId, setHighlightedId } = useChatStore();
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const isHighlighted = highlightedId === call_id;
+
+  useEffect(() => {
+    if (isHighlighted && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isHighlighted]);
+
   return (
-    <div className="mt-2 bg-gray-50 rounded-xl p-3 text-sm font-mono text-gray-800 border border-gray-200 min-h-[160px] flex flex-col shadow-sm transition-all duration-300">
+    <div 
+      ref={cardRef}
+      onClick={() => setHighlightedId(call_id)}
+      className={`mt-2 bg-gray-50 rounded-xl p-3 text-sm font-mono text-gray-800 border min-h-[160px] flex flex-col shadow-sm transition-all duration-300 cursor-pointer ${
+        isHighlighted ? 'border-blue-500 ring-2 ring-blue-500/50 scale-[1.02]' : 'border-gray-200 hover:border-blue-300'
+      }`}
+    >
       <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
         <div className="bg-purple-100 p-1.5 rounded-md">
           <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

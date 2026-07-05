@@ -12,6 +12,7 @@ export function useAgentSocket() {
   const {
     setConnectionState,
     appendToken,
+    startNewMessage,
     setToolCall,
     setToolResult,
     updateContext,
@@ -22,6 +23,9 @@ export function useAgentSocket() {
   const sendMessage = useCallback((msg: ClientMessage) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       addTraceEvent({ direction: 'out', payload: msg });
+      if (msg.type === 'USER_MESSAGE') {
+        bufferRef.current.reset();
+      }
       wsRef.current.send(JSON.stringify(msg));
     }
   }, [addTraceEvent]);
@@ -68,7 +72,8 @@ export function useAgentSocket() {
         addTraceEvent({ direction: 'in', payload: msg });
 
         if (msg.type === 'PING') {
-          sendMessage({ type: 'PONG', echo: msg.challenge });
+          // Handle corrupt PINGs with missing challenge safely
+          sendMessage({ type: 'PONG', echo: msg.challenge || "" });
           return;
         }
 
@@ -76,18 +81,27 @@ export function useAgentSocket() {
 
         for (const yMsg of yielded) {
           switch (yMsg.type) {
+            case 'USER_MESSAGE':
+              startNewMessage(yMsg.stream_id, yMsg.content);
+              break;
             case 'TOKEN':
               appendToken(yMsg.stream_id, yMsg.text);
+              break;
+            case 'TOKEN_GROUP':
+              if (yMsg.tokens && Array.isArray(yMsg.tokens)) {
+                const combinedText = yMsg.tokens.join("");
+                appendToken(yMsg.stream_id, combinedText);
+              }
               break;
             case 'TOOL_CALL':
               setToolCall(yMsg.stream_id, yMsg.call_id, yMsg.tool_name, yMsg.args);
               sendMessage({ type: 'TOOL_ACK', call_id: yMsg.call_id });
               break;
             case 'TOOL_RESULT':
-              setToolResult(yMsg.stream_id, yMsg.result);
+              setToolResult(yMsg.stream_id, yMsg.call_id, yMsg.result);
               break;
             case 'CONTEXT_SNAPSHOT':
-              updateContext(yMsg.data);
+              updateContext(yMsg.context_id, yMsg.data);
               break;
             case 'STREAM_END':
               finishStream(yMsg.stream_id);
@@ -95,13 +109,16 @@ export function useAgentSocket() {
             case 'ERROR':
               console.error('Server error:', yMsg.message);
               break;
+            default:
+              console.warn('Unhandled message type:', (yMsg as Record<string, unknown>).type, yMsg);
+              break;
           }
         }
       } catch (e) {
         console.error('Failed to parse message:', e);
       }
     };
-  }, [setConnectionState, appendToken, setToolCall, setToolResult, updateContext, finishStream, addTraceEvent, sendMessage]);
+  }, [setConnectionState, appendToken, setToolCall, setToolResult, updateContext, finishStream, addTraceEvent, sendMessage, startNewMessage]);
 
   useEffect(() => {
     connect();
@@ -111,8 +128,6 @@ export function useAgentSocket() {
         clearTimeout(reconnectTimeout.current);
       }
       if (wsRef.current) {
-        // ✅ FIX 1: Strip the onclose listener before closing 
-        // so we don't trigger a ghost reconnection!
         wsRef.current.onclose = null;
         wsRef.current.close();
       }

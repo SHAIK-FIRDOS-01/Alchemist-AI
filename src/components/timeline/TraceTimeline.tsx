@@ -2,62 +2,15 @@
 
 import React, { useState, useMemo } from 'react';
 import { useChatStore } from '@/lib/store/useChatStore';
-import { EventRow, GroupedEvent } from './EventRow';
+import { EventRow } from './EventRow';
 
 export function TraceTimeline() {
   const { traceEvents } = useChatStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
 
-  const groupedEvents = useMemo(() => {
-    const result: GroupedEvent[] = [];
-    let currentGroup: GroupedEvent | null = null;
-
-    for (const event of traceEvents) {
-      const payload = event.payload as { type?: string; stream_id?: string; text?: string };
-      if (payload.type === 'TOKEN' && event.direction === 'in') {
-        if (!currentGroup) {
-          currentGroup = {
-            ...event,
-            isGroup: true,
-            groupCount: 1,
-            payload: { type: 'TOKEN_GROUP', stream_id: payload.stream_id, tokens: [payload.text] }
-          };
-        } else {
-          const currentGroupPayload = currentGroup.payload as { stream_id?: string; tokens: string[] };
-          if (currentGroupPayload.stream_id === payload.stream_id) {
-            currentGroup.groupCount! += 1;
-            if (payload.text) {
-              currentGroupPayload.tokens.push(payload.text);
-            }
-          } else {
-            result.push(currentGroup);
-            currentGroup = {
-              ...event,
-              isGroup: true,
-              groupCount: 1,
-              payload: { type: 'TOKEN_GROUP', stream_id: payload.stream_id, tokens: [payload.text] }
-            };
-          }
-        }
-      } else {
-        if (currentGroup) {
-          result.push(currentGroup);
-          currentGroup = null;
-        }
-        result.push({ ...event, isGroup: false });
-      }
-    }
-    
-    if (currentGroup) {
-      result.push(currentGroup);
-    }
-
-    return result;
-  }, [traceEvents]);
-
   const filteredEvents = useMemo(() => {
-    return groupedEvents.filter((event) => {
+    return traceEvents.filter((event) => {
       const payload = event.payload as { type?: string };
       if (typeFilter !== 'ALL' && payload.type !== typeFilter) {
         // Allow TOKEN_GROUP to pass if filter is TOKEN
@@ -72,7 +25,7 @@ export function TraceTimeline() {
       }
       return true;
     });
-  }, [groupedEvents, typeFilter, searchQuery]);
+  }, [traceEvents, typeFilter, searchQuery]);
 
   return (
     <div className="flex flex-col h-full bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">

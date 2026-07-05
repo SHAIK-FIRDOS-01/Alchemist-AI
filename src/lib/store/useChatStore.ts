@@ -2,17 +2,24 @@ import { create } from 'zustand';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 
+export type MessagePart = 
+  | { type: 'text'; content: string }
+  | { type: 'tool'; call_id: string; name: string; args: Record<string, unknown>; result?: Record<string, unknown> };
+
 export interface ChatMessage {
   id: string; // usually the stream_id or a unique UUID for user messages
   role: 'user' | 'agent';
-  text: string;
+  parts: MessagePart[];
   status: 'streaming' | 'tool_pending' | 'finished';
-  toolData?: {
-    call_id: string;
-    name: string;
-    args: Record<string, unknown>;
-    result?: Record<string, unknown>;
-  };
+}
+
+export interface TraceEvent {
+  id: string;
+  timestamp: number;
+  direction: 'in' | 'out';
+  payload: Record<string, unknown>;
+  isGroup: boolean;
+  groupCount?: number;
 }
 
 interface ChatState {
@@ -21,15 +28,18 @@ interface ChatState {
   contextSnapshot: Record<string, unknown> | null;
   contextHistory: Array<{ id: string; timestamp: number; data: Record<string, unknown> }>;
   currentContextIndex: number;
-  traceEvents: Array<{ id: string; timestamp: number; direction: 'in' | 'out'; payload: Record<string, unknown> }>;
+  traceEvents: TraceEvent[];
+  highlightedId: string | null;
+  setHighlightedId: (id: string | null) => void;
   setConnectionState: (state: ConnectionState) => void;
   addTraceEvent: (event: { direction: 'in' | 'out'; payload: Record<string, unknown> }) => void;
   addUserMessage: (content: string) => void;
+  startNewMessage: (stream_id: string, content: string) => void;
   appendToken: (stream_id: string, text: string) => void;
   setToolCall: (stream_id: string, call_id: string, tool_name: string, args: Record<string, unknown>) => void;
-  setToolResult: (stream_id: string, result: Record<string, unknown>) => void;
+  setToolResult: (stream_id: string, call_id: string, result: Record<string, unknown>) => void;
   finishStream: (stream_id: string) => void;
-  updateContext: (data: Record<string, unknown>) => void;
+  updateContext: (context_id: string, data: Record<string, unknown>) => void;
   setContextIndex: (index: number) => void;
 }
 
@@ -40,18 +50,48 @@ export const useChatStore = create<ChatState>((set) => ({
   contextHistory: [],
   currentContextIndex: -1,
   traceEvents: [],
+  highlightedId: null,
 
-  addTraceEvent: (event) => set((state) => ({
-    traceEvents: [
-      ...state.traceEvents,
-      {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        direction: event.direction,
-        payload: event.payload
+  setHighlightedId: (id) => set({ highlightedId: id }),
+
+  addTraceEvent: (event) => set((state) => {
+    const newEvent: TraceEvent = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      direction: event.direction,
+      payload: event.payload,
+      isGroup: false
+    };
+
+    const payload = event.payload as { type?: string; stream_id?: string; text?: string };
+    
+    if (payload.type === 'TOKEN' && event.direction === 'in') {
+      const lastEvent = state.traceEvents[state.traceEvents.length - 1];
+      
+      if (lastEvent && lastEvent.isGroup) {
+        const lastPayload = lastEvent.payload as { type?: string; stream_id?: string; tokens?: string[] };
+        if (lastPayload.type === 'TOKEN_GROUP' && lastPayload.stream_id === payload.stream_id) {
+          // Append to existing group
+          const newTraceEvents = [...state.traceEvents];
+          const updatedGroup = { ...lastEvent, groupCount: (lastEvent.groupCount || 1) + 1 };
+          updatedGroup.payload = {
+            ...lastEvent.payload,
+            tokens: [...(lastPayload.tokens || []), payload.text]
+          };
+          newTraceEvents[newTraceEvents.length - 1] = updatedGroup;
+          return { traceEvents: newTraceEvents };
+        }
       }
-    ]
-  })),
+      
+      // Start new group
+      newEvent.isGroup = true;
+      newEvent.groupCount = 1;
+      newEvent.payload = { type: 'TOKEN_GROUP', stream_id: payload.stream_id, tokens: [payload.text] };
+      return { traceEvents: [...state.traceEvents, newEvent] };
+    }
+    
+    return { traceEvents: [...state.traceEvents, newEvent] };
+  }),
 
   setConnectionState: (state) => set({ connectionState: state }),
 
@@ -61,8 +101,26 @@ export const useChatStore = create<ChatState>((set) => ({
       {
         id: crypto.randomUUID(),
         role: 'user',
-        text: content,
+        parts: [{ type: 'text', content }],
         status: 'finished',
+      }
+    ]
+  })),
+
+  startNewMessage: (stream_id: string, content: string) => set((state) => ({
+    messages: [
+      ...state.messages,
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        parts: [{ type: 'text', content }],
+        status: 'finished',
+      },
+      {
+        id: stream_id,
+        role: 'agent',
+        parts: [],
+        status: 'streaming',
       }
     ]
   })),
@@ -71,9 +129,19 @@ export const useChatStore = create<ChatState>((set) => ({
     const existingIndex = state.messages.findIndex(m => m.id === stream_id);
     if (existingIndex !== -1) {
       const newMessages = [...state.messages];
+      const existingMessage = newMessages[existingIndex];
+      const parts = [...existingMessage.parts];
+      
+      if (parts.length > 0 && parts[parts.length - 1].type === 'text') {
+        const lastPart = parts[parts.length - 1] as { type: 'text'; content: string };
+        parts[parts.length - 1] = { ...lastPart, content: lastPart.content + text };
+      } else {
+        parts.push({ type: 'text', content: text });
+      }
+      
       newMessages[existingIndex] = {
-        ...newMessages[existingIndex],
-        text: newMessages[existingIndex].text + text
+        ...existingMessage,
+        parts
       };
       return { messages: newMessages };
     } else {
@@ -83,7 +151,7 @@ export const useChatStore = create<ChatState>((set) => ({
           {
             id: stream_id,
             role: 'agent',
-            text: text,
+            parts: [{ type: 'text', content: text }],
             status: 'streaming'
           }
         ]
@@ -93,38 +161,69 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setToolCall: (stream_id, call_id, tool_name, args) => set((state) => {
     const existingIndex = state.messages.findIndex(m => m.id === stream_id);
+    const newToolCall: MessagePart = { type: 'tool', call_id, name: tool_name, args };
     if (existingIndex !== -1) {
       const newMessages = [...state.messages];
+      const existingMessage = newMessages[existingIndex];
       newMessages[existingIndex] = {
-        ...newMessages[existingIndex],
+        ...existingMessage,
         status: 'tool_pending',
-        toolData: {
-          call_id,
-          name: tool_name,
-          args
-        }
+        parts: [...existingMessage.parts, newToolCall]
       };
       return { messages: newMessages };
+    } else {
+      return {
+        messages: [
+          ...state.messages,
+          {
+            id: stream_id,
+            role: 'agent',
+            parts: [newToolCall],
+            status: 'tool_pending',
+          }
+        ]
+      };
     }
-    return state;
   }),
 
-  setToolResult: (stream_id, result) => set((state) => {
+  setToolResult: (stream_id, call_id, result) => set((state) => {
     const existingIndex = state.messages.findIndex(m => m.id === stream_id);
     if (existingIndex !== -1) {
-      const existingMessage = state.messages[existingIndex];
       const newMessages = [...state.messages];
+      const existingMessage = newMessages[existingIndex];
+      
+      const parts = existingMessage.parts.map(part => {
+        if (part.type === 'tool' && part.call_id === call_id) {
+          return { ...part, result };
+        }
+        return part;
+      });
+
       newMessages[existingIndex] = {
         ...existingMessage,
         status: 'streaming',
-        toolData: existingMessage.toolData ? {
-          ...existingMessage.toolData,
-          result
-        } : undefined
+        parts
       };
       return { messages: newMessages };
+    } else {
+       return {
+         messages: [
+           ...state.messages,
+           {
+             id: stream_id,
+             role: 'agent',
+             parts: [{
+               type: 'tool',
+               call_id: call_id,
+               name: 'unknown_tool',
+               args: {},
+               result
+             }],
+             status: 'streaming',
+           }
+         ]
+       };
     }
-    return state;
   }),
 
   finishStream: (stream_id) => set((state) => {
@@ -136,20 +235,50 @@ export const useChatStore = create<ChatState>((set) => ({
         status: 'finished'
       };
       return { messages: newMessages };
+    } else {
+       return {
+         messages: [
+           ...state.messages,
+           {
+             id: stream_id,
+             role: 'agent',
+             parts: [],
+             status: 'finished'
+           }
+         ]
+       };
     }
-    return state;
   }),
 
-  updateContext: (data: Record<string, unknown>) => set((state) => {
-    const newHistory = [
-      ...state.contextHistory,
-      { id: crypto.randomUUID(), timestamp: Date.now(), data }
-    ];
-    return {
-      contextSnapshot: data,
-      contextHistory: newHistory,
-      currentContextIndex: newHistory.length - 1
-    };
+  updateContext: (context_id: string, incomingData: Record<string, unknown>) => set((state) => {
+    const existingIndex = state.contextHistory.findIndex(c => c.id === context_id);
+    const prevData = existingIndex !== -1 
+      ? state.contextHistory[existingIndex].data 
+      : (state.contextHistory.length > 0 ? state.contextHistory[state.contextHistory.length - 1].data : {});
+    const mergedData = { ...prevData, ...incomingData };
+
+    if (existingIndex !== -1) {
+      const newHistory = [...state.contextHistory];
+      newHistory[existingIndex] = {
+        ...newHistory[existingIndex],
+        timestamp: Date.now(),
+        data: mergedData 
+      };
+      return {
+        contextSnapshot: mergedData,
+        contextHistory: newHistory,
+      };
+    } else {
+      const newHistory = [
+        ...state.contextHistory,
+        { id: context_id, timestamp: Date.now(), data: mergedData }
+      ];
+      return {
+        contextSnapshot: mergedData,
+        contextHistory: newHistory,
+        currentContextIndex: newHistory.length - 1
+      };
+    }
   }),
 
   setContextIndex: (index) => set({ currentContextIndex: index }),

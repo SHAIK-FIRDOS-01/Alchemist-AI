@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useChatStore } from '@/lib/store/useChatStore';
 
-const JsonViewer = ({ data, prevData, name = null }: { data: unknown, prevData: unknown, name?: string | null }) => {
+const MAX_KEYS_TO_RENDER = 50;
+
+const JsonViewer = ({ data, prevData, name = null, initialExpand = false }: { data: unknown, prevData: unknown, name?: string | null, initialExpand?: boolean }) => {
   const isAdded = prevData === undefined && data !== undefined;
   const isRemoved = data === undefined && prevData !== undefined;
 
@@ -17,6 +19,9 @@ const JsonViewer = ({ data, prevData, name = null }: { data: unknown, prevData: 
   const isPrevArr = isArray(prevData);
 
   const containerClass = `pl-4 py-0.5 font-mono text-sm ${isAdded ? 'bg-green-100 dark:bg-green-900/30' : ''} ${isRemoved ? 'line-through text-red-500 bg-red-50 dark:bg-red-900/20' : ''}`;
+
+  const [isExpanded, setIsExpanded] = useState(initialExpand || name === null);
+  const [renderedKeysCount, setRenderedKeysCount] = useState(MAX_KEYS_TO_RENDER);
 
   if (isRemoved) {
     return (
@@ -38,24 +43,50 @@ const JsonViewer = ({ data, prevData, name = null }: { data: unknown, prevData: 
     const bracketOpen = isDataArr ? '[' : '{';
     const bracketClose = isDataArr ? ']' : '}';
 
+    const visibleKeys = keys.slice(0, renderedKeysCount);
+    const hasMore = keys.length > renderedKeysCount;
+
     return (
       <div className={containerClass}>
-        <div className="flex">
-          {name !== null && <span className="mr-2 font-semibold text-blue-600 dark:text-blue-400">&quot;{name}&quot;:</span>}
-          <span className="text-gray-500 dark:text-gray-400">{bracketOpen}</span>
+        <div 
+          className="flex cursor-pointer hover:opacity-80 select-none items-center" 
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          {name !== null && (
+            <span className="mr-2 font-semibold text-blue-600 dark:text-blue-400">
+              <span className="inline-block w-3 text-center mr-1 text-gray-400 text-xs">
+                {isExpanded ? '▼' : '▶'}
+              </span>
+              &quot;{name}&quot;:
+            </span>
+          )}
+          <span className="text-gray-500 dark:text-gray-400">
+            {bracketOpen} {isExpanded ? '' : ` ${keys.length} items ${bracketClose}`}
+          </span>
         </div>
-        <div>
-          {keys.map(key => (
-            <JsonViewer
-              key={key}
-              name={key}
-              // Explicit assertion to fix the 'unknown' error
-              data={(data as Record<string, unknown>)[key]}
-              prevData={prevData && (isPrevObj || isPrevArr) ? (prevData as Record<string, unknown>)[key] : undefined}
-            />
-          ))}
-        </div>
-        <div className="text-gray-500 dark:text-gray-400">{bracketClose}</div>
+        {isExpanded && (
+          <>
+            <div>
+              {visibleKeys.map(key => (
+                <JsonViewer
+                  key={key}
+                  name={key}
+                  data={(data as Record<string, unknown>)[key]}
+                  prevData={prevData && (isPrevObj || isPrevArr) ? (prevData as Record<string, unknown>)[key] : undefined}
+                />
+              ))}
+              {hasMore && (
+                <div 
+                  className="pl-4 py-1 text-blue-500 hover:text-blue-700 cursor-pointer text-xs font-semibold"
+                  onClick={() => setRenderedKeysCount(prev => prev + MAX_KEYS_TO_RENDER)}
+                >
+                  Show more ({keys.length - renderedKeysCount} remaining)...
+                </div>
+              )}
+            </div>
+            <div className="text-gray-500 dark:text-gray-400">{bracketClose}</div>
+          </>
+        )}
       </div>
     );
   }
@@ -79,7 +110,9 @@ const JsonViewer = ({ data, prevData, name = null }: { data: unknown, prevData: 
 };
 
 export function ContextInspector() {
-  const { contextHistory, currentContextIndex, setContextIndex } = useChatStore();
+  const contextHistory = useChatStore((state) => state.contextHistory);
+  const currentContextIndex = useChatStore((state) => state.currentContextIndex);
+  const setContextIndex = useChatStore((state) => state.setContextIndex);
 
   const currentData = useMemo(() => {
     if (currentContextIndex >= 0 && currentContextIndex < contextHistory.length) {

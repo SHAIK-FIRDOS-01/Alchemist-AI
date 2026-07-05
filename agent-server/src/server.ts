@@ -217,7 +217,7 @@ export class AgentServer {
     const script = selectScript(content);
     console.log(`[agent-server] Selected script: ${script.name} (${script.id})`);
 
-    this.runScript(ws, script).catch((err) => {
+    this.runScript(ws, script, content).catch((err) => {
       if (err.name !== "AbortError") {
         console.error("[agent-server] Script error:", err);
       }
@@ -296,7 +296,7 @@ export class AgentServer {
   // Script execution engine
   // ─────────────────────────────────────────────────────────
 
-  private async runScript(ws: WebSocket, script: typeof import("./scripts.js").RESPONSE_SCRIPTS[number]): Promise<void> {
+  private async runScript(ws: WebSocket, script: typeof import("./scripts.js").RESPONSE_SCRIPTS[number], userContent: string): Promise<void> {
     const streamId = `s_${randomUUID().slice(0, 8)}`;
     const abort = new AbortController();
     this.streamAbortController = abort;
@@ -356,18 +356,54 @@ export class AgentServer {
             if (abort.signal.aborted) return;
             if (ws.readyState !== WebSocket.OPEN) return;
 
+            // ── Dynamic bypass logic ────────────────────────────────
+            let modifiedResult = { ...event.result };
+            let shouldBypass = false;
+            let bypassText = "";
+
+            if (event.tool_name === "classify_intent" && event.result.intent === "general_query") {
+              const contentLower = userContent.toLowerCase();
+              const isCreative = contentLower.includes("joke") || contentLower.includes("story") || contentLower.includes("poem") || contentLower.includes("creative");
+              
+              // Simple heuristic for a simple request (e.g. very short)
+              const isSimple = !isCreative && (contentLower.split(" ").length < 3 || contentLower.includes("hello") || contentLower.includes("hi"));
+
+              if (isCreative) {
+                modifiedResult.category = "creative_task";
+                modifiedResult.suggested_tools = [];
+                shouldBypass = true;
+                bypassText = "Sure, I can be creative! Here's a joke: Why did the AI cross the road? To optimize its pathing algorithm!";
+              } else if (isSimple) {
+                modifiedResult.category = "simple_request";
+                modifiedResult.suggested_tools = [];
+                shouldBypass = true;
+                bypassText = "I can certainly help you with that right away.";
+              }
+            }
+
             // Send TOOL_RESULT
             const resultMsg: ServerMessage = {
               type: "TOOL_RESULT",
               seq: this.nextSeq(),
               call_id: callId,
-              result: event.result,
+              result: modifiedResult,
               stream_id: streamId,
             };
             await this.sendMessage(ws, resultMsg);
 
             // Brief pause before resuming tokens
             await this.delay(200, abort.signal);
+
+            // If we decided to bypass, generate the dynamic text and exit the script
+            if (shouldBypass) {
+              const tokens = bypassText.split(" ").map((w, idx, arr) => (idx === arr.length - 1 ? w : w + " "));
+              for (const text of tokens) {
+                await this.sendMessage(ws, { type: "TOKEN", seq: this.nextSeq(), text, stream_id: streamId });
+                const tokenDelay = 30 + Math.random() * 50;
+                await this.delay(tokenDelay, abort.signal);
+              }
+              break; // Skip the rest of the predefined script events
+            }
             break;
           }
         }

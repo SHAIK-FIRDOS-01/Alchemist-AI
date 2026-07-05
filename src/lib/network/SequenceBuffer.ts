@@ -5,18 +5,24 @@ export class SequenceBuffer {
   private buffer: Map<number, ServerMessage> = new Map();
 
   public insert(message: ServerMessage): ServerMessage[] {
+    // Drop already processed sequences (deduplication from reconnects or duplicate deliveries)
     if (message.seq < this.nextExpectedSeq) {
       return [];
     }
 
+    // Buffer future sequences
     if (message.seq > this.nextExpectedSeq) {
-      this.buffer.set(message.seq, message);
+      if (!this.buffer.has(message.seq)) {
+        this.buffer.set(message.seq, message);
+      }
       return [];
     }
 
+    // Exact match, start yielding
     const yielded: ServerMessage[] = [message];
     this.nextExpectedSeq++;
 
+    // Yield any buffered messages that are now in sequence
     while (this.buffer.has(this.nextExpectedSeq)) {
       const bufferedMessage = this.buffer.get(this.nextExpectedSeq)!;
       this.buffer.delete(this.nextExpectedSeq);

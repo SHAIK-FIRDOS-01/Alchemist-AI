@@ -23,8 +23,8 @@ export function ChatPanel() {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    addUserMessage(inputValue);
     sendMessage({ type: 'USER_MESSAGE', content: inputValue });
+    addUserMessage(inputValue);
     setInputValue('');
   };
 

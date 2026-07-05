@@ -64,11 +64,27 @@ export type ServerErrorEvent = {
     message: string;
 };
 
+export type ServerTokenGroupEvent = {
+    type: "TOKEN_GROUP";
+    seq: number;
+    tokens: string[];
+    stream_id: string;
+};
+
+export type ServerUserMessageEvent = {
+    type: "USER_MESSAGE";
+    seq: number;
+    content: string;
+    stream_id: string;
+};
+
 export type ServerMessage =
     | ServerTokenEvent
+    | ServerTokenGroupEvent
     | ServerToolCallEvent
     | ServerToolResultEvent
     | ServerContextEvent
     | ServerPingEvent
     | ServerStreamEndEvent
-    | ServerErrorEvent;
+    | ServerErrorEvent
+    | ServerUserMessageEvent;

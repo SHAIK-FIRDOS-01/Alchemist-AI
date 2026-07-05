@@ -16,6 +16,27 @@ This application bridges the gap between complex AI orchestration and intuitive 
 
 ## 🏗 Architecture & System Design
 
+**Architectural Approach:**
+This application implements a robust, event-driven frontend architecture leveraging Zustand for high-performance state management and a custom `SequenceBuffer` to enforce strict sequential processing over a chaotic WebSocket transport. By chunking message payloads into discrete `MessagePart`s (text vs tool), we guarantee zero-layout-shift interleaving during mid-stream tool calls, ensuring perfect UX even when dealing with rapid, out-of-order, or duplicated packets.
+
+### WebSocket State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> disconnected
+    disconnected --> connecting : connect()
+    connecting --> connected : socket open / send RESUME
+    connected --> streaming : receive TOKEN
+    streaming --> tool_call_pending : receive TOOL_CALL
+    tool_call_pending --> streaming : receive TOOL_RESULT
+    streaming --> connected : receive STREAM_END
+    
+    connected --> reconnecting : socket drop
+    streaming --> reconnecting : socket drop
+    tool_call_pending --> reconnecting : socket drop
+    
+    reconnecting --> connecting : exponential backoff timeout
+```
+
 Building a reliable real-time application in React demands a rigorous approach to lifecycle management and state reconciliation. This project solves the hardest parts of frontend WebSocket integration:
 
 - **Resilient WebSocket Lifecycle Management:** Custom React hooks meticulously manage connection stability, polling, and automated reconnection strategies. The socket layer is specifically hardened to gracefully survive **React 18 Strict Mode's** aggressive mount/unmount lifecycles—eliminating memory leaks and preventing redundant handshake cascades.
