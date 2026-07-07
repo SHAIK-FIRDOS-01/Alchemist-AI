@@ -112,41 +112,49 @@ const JsonViewer = ({ data, prevData, name = null, initialExpand = false }: { da
 export function ContextInspector() {
   const contextHistory = useChatStore((state) => state.contextHistory);
   const currentContextIndex = useChatStore((state) => state.currentContextIndex);
+  const activeContextId = useChatStore((state) => state.activeContextId);
   const setContextIndex = useChatStore((state) => state.setContextIndex);
 
+  const activeContextTimeline = useMemo(() => {
+    if (!activeContextId) return [];
+    return contextHistory.filter(c => c.id === activeContextId);
+  }, [contextHistory, activeContextId]);
+
   const currentData = useMemo(() => {
-    if (currentContextIndex >= 0 && currentContextIndex < contextHistory.length) {
-      return contextHistory[currentContextIndex].data;
+    if (currentContextIndex >= 0 && currentContextIndex < activeContextTimeline.length) {
+      return activeContextTimeline[currentContextIndex].data;
     }
     return null;
-  }, [contextHistory, currentContextIndex]);
+  }, [activeContextTimeline, currentContextIndex]);
 
   const prevData = useMemo(() => {
-    if (currentContextIndex > 0 && currentContextIndex < contextHistory.length) {
-      return contextHistory[currentContextIndex - 1].data;
+    if (currentContextIndex > 0 && currentContextIndex < activeContextTimeline.length) {
+      return activeContextTimeline[currentContextIndex - 1].data;
     }
     return undefined;
-  }, [contextHistory, currentContextIndex]);
+  }, [activeContextTimeline, currentContextIndex]);
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-neutral-900 overflow-hidden">
       <div className="p-4 border-b border-gray-200 dark:border-neutral-800 shrink-0 bg-white dark:bg-neutral-950">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Agent Context</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Agent Context {activeContextId ? `(${activeContextId})` : ''}
+        </h2>
 
-        {contextHistory.length > 1 && (
+        {activeContextTimeline.length > 1 && (
           <div className="mt-4">
             <div className="flex justify-between items-center mb-1">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
                 History Scrubber
               </label>
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {currentContextIndex + 1} / {contextHistory.length}
+                {currentContextIndex + 1} / {activeContextTimeline.length}
               </span>
             </div>
             <input
               type="range"
               min={0}
-              max={contextHistory.length - 1}
+              max={activeContextTimeline.length - 1}
               value={currentContextIndex}
               onChange={(e) => setContextIndex(parseInt(e.target.value, 10))}
               className="w-full accent-blue-600"
@@ -156,7 +164,7 @@ export function ContextInspector() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {contextHistory.length === 0 ? (
+        {activeContextTimeline.length === 0 ? (
           <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
             Waiting for context snapshots...
           </div>

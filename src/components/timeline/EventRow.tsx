@@ -14,8 +14,12 @@ export function EventRow({ event }: EventRowProps) {
 
   const payload = event.payload as Record<string, unknown>;
   const callId = payload.call_id as string | undefined;
+  const streamId = payload.stream_id as string | undefined;
 
-  const isHighlighted = callId && highlightedId === callId;
+  const type = payload.type as string;
+  const targetId = type === 'TOKEN' || type === 'TOKEN_GROUP' ? streamId : callId;
+
+  const isHighlighted = targetId && highlightedId === targetId;
 
   useEffect(() => {
     if (isHighlighted && rowRef.current) {
@@ -25,8 +29,8 @@ export function EventRow({ event }: EventRowProps) {
 
   const handleRowClick = () => {
     setExpanded(!expanded);
-    if (callId) {
-      setHighlightedId(callId);
+    if (targetId) {
+      setHighlightedId(targetId);
     }
   };
 
@@ -57,14 +61,17 @@ export function EventRow({ event }: EventRowProps) {
   const payloadWithType = event.payload as { type?: string };
   const typeName = payloadWithType?.type || 'UNKNOWN';
   const colorClass = getTypeColor(typeName);
-  const timeString = new Date(event.timestamp).toISOString().split('T')[1].slice(0, -1); // HH:mm:ss.SSS
+  const d = new Date(event.timestamp);
+  const timeString = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}.${d.getMilliseconds().toString().padStart(3, '0')}`;
+
+  const isToolChild = typeName === 'TOOL_ACK' || typeName === 'TOOL_RESULT';
 
   return (
     <div 
       ref={rowRef}
       className={`flex flex-col border-b border-gray-100 last:border-0 transition-colors ${
         isHighlighted ? 'bg-blue-50/80 border-l-4 border-l-blue-500' : 'hover:bg-gray-50 border-l-4 border-l-transparent'
-      }`}
+      } ${isToolChild ? 'ml-6 border-l-gray-200' : ''}`}
     >
       <div 
         className="flex items-center justify-between p-2 cursor-pointer select-none"

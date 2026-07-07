@@ -71,16 +71,14 @@ export function useAgentSocket() {
 
         addTraceEvent({ direction: 'in', payload: msg });
 
-        if (msg.type === 'PING') {
-          // Handle corrupt PINGs with missing challenge safely
-          sendMessage({ type: 'PONG', echo: msg.challenge || "" });
-          return;
-        }
-
         const yielded = bufferRef.current.insert(msg);
 
         for (const yMsg of yielded) {
           switch (yMsg.type) {
+            case 'PING':
+              // Handle corrupt PINGs with missing challenge safely
+              sendMessage({ type: 'PONG', echo: yMsg.challenge || "" });
+              break;
             case 'USER_MESSAGE':
               startNewMessage(yMsg.stream_id, yMsg.content);
               break;

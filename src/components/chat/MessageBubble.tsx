@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { ChatMessage } from '@/lib/store/useChatStore';
+import { ChatMessage, useChatStore } from '@/lib/store/useChatStore';
 import { ToolCallCard } from './ToolCallCard';
 
 interface MessageBubbleProps {
@@ -10,6 +10,8 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const highlightedId = useChatStore((state) => state.highlightedId);
+  const isHighlighted = highlightedId === message.id;
 
   return (
     <div className={`flex w-full mb-6 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -22,7 +24,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {message.parts.map((part, idx) => {
           if (part.type === 'text') {
             return (
-              <div key={idx} className="whitespace-pre-wrap break-words text-[15px] leading-relaxed mb-2 last:mb-0">
+              <div 
+                key={idx} 
+                className={`whitespace-pre-wrap break-words text-[15px] leading-relaxed mb-2 last:mb-0 ${isHighlighted && !isUser ? 'ring-2 ring-blue-400 bg-blue-50/30 p-2 rounded-md transition-all' : 'p-2 transition-all'}`}
+              >
                 {part.content}
               </div>
             );
