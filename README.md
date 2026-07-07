@@ -92,19 +92,25 @@ npm run test:e2e
 
 The agent streams tokens incrementally. When a `TOOL_CALL` arrives mid-stream, the text freezes in place and a tool call card appears below it showing the tool name, arguments, and a loading spinner. When `TOOL_RESULT` arrives, the card updates and streaming resumes.
 
-> *See the app running at `http://localhost:3000` with the agent-server active.*
+![Streamed Response with Tool Call](./Pic-1.png)
 
 ### (b) Trace Timeline
 
 The left-hand panel shows every protocol event in real time — `TOKEN` events are batched into grouped rows ("Streamed N tokens"), `TOOL_CALL`/`TOOL_RESULT` events are visually indented together by `call_id`, and `PING`/`PONG`/`CONTEXT_SNAPSHOT`/`ERROR` events each appear with colour-coded type badges. The filter bar and search box allow filtering by event type or payload content.
 
+![Trace Timeline](./Pic-2.png)
+
 ### (c) Context Inspector with Diff
 
 The right-hand panel renders the `CONTEXT_SNAPSHOT` payload as an interactive collapsible JSON tree. When a second snapshot arrives for the same `context_id`, added keys are highlighted in green and removed keys are struck through in red. The history scrubber (range slider) allows stepping backward and forward through every snapshot version.
 
+![Context Inspector with Diff](./Pic-3.png)
+
 ---
 
-## Chaos Mode Screen Recording
+## 🎬 Chaos Mode Screen Recording
+
+> 🎧 **Best experienced with headphones — the audio narration adds important context!**
 
 The screen recording demonstrates the following scenarios in **chaos mode**:
 
@@ -114,7 +120,14 @@ The screen recording demonstrates the following scenarios in **chaos mode**:
 4. **Oversized context snapshot** — A 500KB+ `CONTEXT_SNAPSHOT` arrives. The context inspector's `MAX_KEYS_TO_RENDER` pagination keeps the tab responsive and non-blocking.
 5. **Corrupt heartbeat** — A `PING` with an empty `challenge` field arrives. The client handles it without crashing by defaulting to `echo: ""` in the `PONG` response.
 
-📹 **Recording file included in repo:** [`Assignment.mp4`](./Assignment.mp4)
+### ▶️ Watch on YouTube
+
+[![Watch the Demo on YouTube](https://img.youtube.com/vi/D_rIN2vbqok/0.jpg)](https://www.youtube.com/watch?v=D_rIN2vbqok)
+
+### 📁 Alternate: Google Drive
+
+If YouTube is unavailable, download or stream the full recording here:
+[📥 View on Google Drive](https://drive.google.com/file/d/1pT0FkBSdqUp8KaLXgAUHb-1u_KsFYda2/view?usp=sharing)
 
 ---
 
